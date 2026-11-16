@@ -72,19 +72,29 @@ def gradient(top, bottom) -> Image.Image:
 
 
 def cutout(raw: bytes, box: int) -> Image.Image:
-    im = Image.open(io.BytesIO(raw)).convert("RGBA")
+    """Odstrani belo ozadje okoli izdelka (samo tisto, ki se dotika robov – bel telefon ostane bel)."""
+    im = Image.open(io.BytesIO(raw)).convert("RGB")
     im.thumbnail((1200, 1200))
-    px = im.load()
-    for y in range(im.height):
-        for x in range(im.width):
-            r, g, b, a = px[x, y]
-            if r > 244 and g > 244 and b > 244:
-                px[x, y] = (r, g, b, 0)
-    bbox = im.getbbox()
+    work = im.copy()
+    key = (1, 254, 3)
+    w, h = work.size
+    for pt in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1), (w // 2, 0), (w // 2, h - 1), (0, h // 2), (w - 1, h // 2)):
+        r, g, b = work.getpixel(pt)
+        if r > 235 and g > 235 and b > 235:
+            ImageDraw.floodfill(work, pt, key, thresh=18)
+    mask = Image.new("L", (w, h), 255)
+    mp, wp = mask.load(), work.load()
+    for y in range(h):
+        for x in range(w):
+            if wp[x, y] == key:
+                mp[x, y] = 0
+    out = im.convert("RGBA")
+    out.putalpha(mask.filter(ImageFilter.GaussianBlur(0.8)))
+    bbox = mask.getbbox()
     if bbox:
-        im = im.crop(bbox)  # brez prosojnega roba, da senca sede tik pod izdelek
-    im.thumbnail((box, box), Image.LANCZOS)
-    return im
+        out = out.crop(bbox)  # brez praznega roba, da senca sede tik pod izdelek
+    out.thumbnail((box, box), Image.LANCZOS)
+    return out
 
 
 class Base:
