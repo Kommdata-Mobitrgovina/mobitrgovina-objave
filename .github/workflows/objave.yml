@@ -1,0 +1,61 @@
+name: Objave na FB in IG
+
+on:
+  schedule:
+    # ure so v UTC: 8:15, 13:15 in 18:15 po slovenskem zimskem času
+    - cron: "15 7 * * *"
+    - cron: "15 12 * * *"
+    - cron: "15 17 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Samo preizkus (ne objavi)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: objave
+  cancel-in-progress: false
+
+jobs:
+  objava:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - run: pip install -q -r requirements.txt
+      - name: Pisava Poppins
+        run: |
+          mkdir -p fonts
+          for w in Bold Medium Regular; do
+            curl -sSfL -o fonts/Poppins-$w.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-$w.ttf
+          done
+      - name: Naredi video in objavi
+        env:
+          WC_URL: ${{ secrets.WC_URL }}
+          WC_KEY: ${{ secrets.WC_KEY }}
+          WC_SECRET: ${{ secrets.WC_SECRET }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
+        run: python main.py
+      - name: Shrani video za pregled
+        uses: actions/upload-artifact@v4
+        with:
+          name: video
+          path: out/
+          retention-days: 7
+      - name: Zapiši, kaj je že objavljeno
+        run: |
+          git config user.name "objave-bot"
+          git config user.email "objave-bot@users.noreply.github.com"
+          git add state/posted.json || true
+          git diff --cached --quiet || (git commit -m "Objavljeno $(date -u +%F\ %H:%M)" && git push)
