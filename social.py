@@ -166,8 +166,10 @@ def spoken_name(name: str) -> str:
 
 
 def caption(d: dict, rnd: random.Random) -> str:
-    first = re.sub(r"[^a-zčšž]", "", d["name"].split()[0].lower())
-    brand = f" #{first}" if first and first not in ("oem", "original", "originalna") else ""
+    brands = ("apple", "samsung", "xiaomi", "redmi", "poco", "huawei", "honor", "realme", "nokia", "motorola",
+              "oneplus", "google", "oppo", "vivo", "sony", "lg", "nothing", "zte", "tcl", "doro", "cat")
+    first = next((w for w in re.findall(r"[a-z]+", d["name"].lower()) if w in brands), "")
+    brand = f" #{first}" if first else ""
     kind = ("rabljenitelefoni" if d["used"] else "novitelefoni") if d["phone"] else "dodatkizatelefone"
     if d["discount"]:
         head = rnd.choice([
