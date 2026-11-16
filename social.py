@@ -25,8 +25,9 @@ GRAPH = "https://graph.facebook.com/v24.0"
 STATE = Path(__file__).parent / "state" / "posted.json"
 REPOST_AFTER_DAYS = 21
 NEW_DAYS = 30
+ACCESSORIES_FROM = datetime(2026, 11, 19, tzinfo=timezone.utc)  # do takrat samo telefoni
 UA = {"User-Agent": "mobitrgovina-social/2.0"}
-BUYBACK_URL = "https://mobitrgovina.com/odkup-telefona/"
+BUYBACK_URL = "https://mobitrgovina.com/odkup-telefona/#wpcf7-f74566-p54597-o1"  # obrazec za odkup
 
 
 # ---------------------------------------------------------------- WooCommerce
@@ -93,7 +94,7 @@ def pick(products: list[dict], st: dict, rnd: random.Random) -> dict | None:
     new = sorted([p for p in phones if _age_days(p) <= NEW_DAYS and str(p["id"]) not in st],
                  key=lambda p: p["date_created"], reverse=True)
     older = [p for p in phones if p not in new]
-    acc = [p for p in fresh if not is_phone(p)]
+    acc = [p for p in fresh if not is_phone(p)] if datetime.now(timezone.utc) >= ACCESSORIES_FROM else []
     roll = rnd.random()
     if new and roll < 0.65:
         return new[0]
@@ -103,7 +104,7 @@ def pick(products: list[dict], st: dict, rnd: random.Random) -> dict | None:
     if older:
         sale = [p for p in older if p.get("on_sale")]
         return rnd.choice((sale or older)[:60])
-    return (new or acc or fresh)[0]
+    return (new or acc or phones or [None])[0]
 
 
 # ---------------------------------------------------------------- vsebina
@@ -158,11 +159,45 @@ def _eur(v: float) -> str:
     return f"{v:.2f}".replace(".", ",") + " €"
 
 
-def spoken_name(name: str) -> str:
+COLORS = {"black": "črni", "white": "beli", "blue": "modri", "green": "zeleni", "red": "rdeči", "pink": "roza",
+          "purple": "vijolični", "silver": "srebrni", "gold": "zlati", "gray": "sivi", "grey": "sivi",
+          "yellow": "rumeni", "orange": "oranžni", "charcoal": "temno sivi", "graphite": "grafitni"}
+EN_WORDS = {"usb", "power", "charger", "case", "cover", "cable", "original", "oem", "dual", "sim",
+            "with", "for", "and", "the", "fast", "charging", "wall", "travel", "type", "white", "black", "blue",
+            "green", "red", "pink", "purple", "silver", "gold", "gray", "grey", "yellow", "orange", "charcoal",
+            "graphite", "space", "air", "titanium", "midnight", "starlight", "edition", "tempered", "glass",
+            "screen", "protector", "silicone", "magnetic", "wireless", "earphones", "headphones"}
+
+
+def _plural(n: int, one: str, two: str, few: str, many: str) -> str:
+    r = n % 100
+    return one if r == 1 else two if r == 2 else few if r in (3, 4) else many
+
+
+def eur_words(v: float) -> str:
+    """349.99 -> '349 evrov in 99 centov' (pravilni sklon za slovenski govor)."""
+    e, c = int(v), round((v - int(v)) * 100)
+    out = f"{e} {_plural(e, 'evro', 'evra', 'evri', 'evrov')}"
+    if c:
+        out += f" in {c} {_plural(c, 'cent', 'centa', 'centi', 'centov')}"
+    return out
+
+
+def spoken_name(name: str, phone: bool = True) -> str:
+    """Ime, ki se lepo sliši v slovenščini: brez kod, pomnilnika in angleških dodatkov."""
     s = re.sub(r"\(.*?\)", " ", name)
     s = re.sub(r"\b\d+\s?GB(\s?/\s?\d+\s?GB)?\b", " ", s, flags=re.I)
-    s = re.sub(r"\b(Dual SIM|5G|4G|LTE)\b", lambda m: " 5 G " if m.group(1) == "5G" else " ", s, flags=re.I)
-    return re.sub(r"\s+", " ", s).strip()
+    s = re.sub(r"\b(\d+)\s?W\b", lambda m: f"{m.group(1)} vatni", s)
+    s = re.sub(r"\b5G\b", " 5 G ", s)
+    words = []
+    for w in s.split():
+        lw = w.lower().strip(",.")
+        if lw in EN_WORDS or re.fullmatch(r"[A-Z0-9]{2,}[-/][A-Z0-9/-]+", w) or re.fullmatch(r"[A-Z]{1,3}\d{3,}\w*", w):
+            if not phone or lw not in ("air",):
+                continue
+        if lw not in (x.lower() for x in words):
+            words.append(w)
+    return re.sub(r"\s+", " ", " ".join(words)).strip()
 
 
 def caption(d: dict, rnd: random.Random) -> str:
@@ -181,7 +216,7 @@ def caption(d: dict, rnd: random.Random) -> str:
     else:
         icon = "♻️" if d["used"] else ("📱" if d["phone"] else "🔌")
         head = rnd.choice([f"{icon} {d['name']}", f"{icon} Novo v ponudbi: {d['name']}",
-                           f"{icon} Iščete {spoken_name(d['name'])}? Imamo ga!"])
+                           f"{icon} Iščete {d['name']}? Imamo ga!"])
         price = f"💶 Cena: {_eur(d['price'])}"
     body = [head, price]
     if d["chips"]:
@@ -194,19 +229,23 @@ def caption(d: dict, rnd: random.Random) -> str:
 
 
 def voice_script(d: dict, rnd: random.Random) -> str:
-    name = spoken_name(d["name"])
-    intro = rnd.choice(["Novo v Mobitrgovini!", "Poglejte to ponudbo!", "Iščete nov telefon?" if d["phone"]
-                        else "Potrebujete dodatno opremo?", "Pravkar prispelo!" if "NOVO" in d["tag"] else
-                        "Super priložnost!"])
-    if d["discount"]:
-        deal = rnd.choice([f"{name}, zdaj za samo {_eur(d['price'])}.",
-                           f"{name} je znižan za {d['discount']} odstotkov, samo še {_eur(d['price'])}."])
-    else:
-        deal = f"{name}, za {_eur(d['price'])}."
-    cond = ""
+    name = spoken_name(d["name"], d["phone"])
+    price = eur_words(d["price"])
     if d["phone"]:
-        cond = "Rabljen, lepo ohranjen, z garancijo." if d["used"] else "Nov aparat z garancijo."
-    cta = rnd.choice(["Naročite na mobitrgovina pika com.", "Več na mobitrgovina pika com, dostava po vsej Sloveniji.",
+        intro = rnd.choice(["Novo v Mobitrgovini!", "Poglejte to ponudbo!", "Iščete nov telefon?",
+                            "Pravkar prispelo!" if "NOVO" in d["tag"] else "Odlična priložnost!"])
+        cond = "Rabljen, lepo ohranjen in z garancijo." if d["used"] else "Nov aparat, z garancijo."
+    else:
+        intro = rnd.choice(["Potrebujete novo dodatno opremo?", "Za vaš telefon imamo tudi dodatke.",
+                            "Odlična dodatna oprema po ugodni ceni!"])
+        cond = "Originalna kakovost, takoj na zalogi." if "original" in d["name"].lower() else "Takoj na zalogi."
+    if d["discount"]:
+        deal = rnd.choice([f"{name}. Zdaj samo {price}.",
+                           f"{name} je znižan za {d['discount']} odstotkov. Cena je le še {price}."])
+    else:
+        deal = f"{name}. Cena je {price}."
+    cta = rnd.choice(["Naročite na mobitrgovina pika com.",
+                      "Več na mobitrgovina pika com, dostavimo po vsej Sloveniji.",
                       "Pohitite, dokler traja zaloga. Mobitrgovina pika com."])
     return " ".join(x for x in (intro, deal, cond, cta) if x)
 
@@ -219,6 +258,8 @@ BUYBACK_SCRIPTS = [
     "denar dobite takoj. Ali pa ga zamenjate po sistemu staro za novo. Mobitrgovina pika com.",
     "Vaš stari telefon je vreden več, kot mislite. Odkupimo delujoče in nepoškodovane telefone in tablice. "
     "Gotovina takoj ali menjava za nov aparat. Obiščite Mobitrgovino.",
+    "Bi radi prodali svoj telefon? Na mobitrgovina pika com izpolnite kratek obrazec za odkup, "
+    "mi pa vam pošljemo ponudbo. Gotovina ali menjava za nov aparat, hitro in pošteno.",
 ]
 
 BUYBACK_CAPTIONS = [
@@ -234,7 +275,7 @@ BUYBACK_CAPTIONS = [
 
 def buyback_caption(rnd: random.Random) -> str:
     return (rnd.choice(BUYBACK_CAPTIONS) + "\n\nℹ️ Pogoji: aparat mora biti delujoč, nepoškodovan in ne sme biti "
-            f"zaklenjen (iCloud).\n👉 Več: {BUYBACK_URL}\n\n"
+            f"zaklenjen (iCloud).\n📝 Izpolnite obrazec za odkup: {BUYBACK_URL}\n\n"
             "#odkuptelefonov #gotovina #mobitrgovina #rabljenitelefoni #staroZaNovo #slovenija")
 
 
@@ -292,6 +333,7 @@ def post_instagram_reel(video: Path, text: str) -> str:
     pub = _check(requests.post(f"{GRAPH}/{ig}/media_publish", timeout=60,
                                data={"creation_id": cid, "access_token": tok}))
     return pub["id"]
+
 
 # ---------------------------------------------------------------- zgodbe (stories)
 def post_facebook_story(video: Path, text: str = "") -> str:
