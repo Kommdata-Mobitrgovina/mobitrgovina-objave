@@ -70,12 +70,14 @@ def pick(products: list[dict], st: dict) -> dict | None:
              if str(p["id"]) not in st or datetime.fromisoformat(st[str(p["id"])]) < cutoff]
     if not fresh:
         return None
-    # nikoli objavljeni najprej, potem akcije, potem najnovejši
-    fresh.sort(key=lambda p: (str(p["id"]) in st, not p.get("on_sale"), p.get("date_modified", "")), reverse=False)
+    # nikoli objavljeni najprej; med njimi telefoni pred dodatki, akcije pred ostalim, najnovejši najprej
     never = [p for p in fresh if str(p["id"]) not in st]
     pool = never or fresh
-    sale = [p for p in pool if p.get("on_sale")]
-    return (sale or pool)[0]
+    return max(pool, key=lambda p: (is_phone(p), bool(p.get("on_sale")), p.get("date_modified", "")))
+
+
+def is_phone(p: dict) -> bool:
+    return any("APARAT" in c["name"].upper() for c in p.get("categories", []))
 
 
 # ---------------------------------------------------------------- vsebina
@@ -107,11 +109,14 @@ def describe(p: dict) -> dict:
         info.append(next(k for k in keep if "garancij" in k.lower()))
     tag = "AKCIJA" if disc else ("RABLJENO" if used else "NOVO")
     return {"name": clean(p["name"]), "price": price, "regular": reg, "discount": disc,
-            "tag": tag, "info": info, "url": p["permalink"], "used": used, "short": sd}
+            "tag": tag, "info": info, "url": p["permalink"], "used": used, "short": sd,
+            "phone": is_phone(p)}
 
 
 def caption(d: dict) -> str:
-    brand = d["name"].split()[0].lower()
+    first = re.sub(r"[^a-zčšž]", "", d["name"].split()[0].lower())
+    brand = f" #{first}" if first and first not in ("oem", "original", "originalna") else ""
+    kind = ("rabljenitelefoni" if d["used"] else "novitelefoni") if d.get("phone") else "dodatkizatelefone"
     lines = []
     if d["discount"]:
         lines.append(f"🔥 AKCIJA −{d['discount']} %: {d['name']}")
@@ -123,7 +128,7 @@ def caption(d: dict) -> str:
         lines.append("")
         lines.append("✅ " + d["short"][:220])
     lines += ["", f"🛒 Naroči: {d['url']}", "📦 Dostava po vsej Sloveniji", "",
-              f"#mobitrgovina #telefoni #mobitel #{brand} #{'rabljenitelefoni' if d['used'] else 'novitelefoni'} #slovenija"]
+              f"#mobitrgovina #telefoni #mobitel{brand} #{kind} #slovenija"]
     return "\n".join(lines)
 
 
