@@ -241,7 +241,8 @@ def voice_script(d: dict, rnd: random.Random) -> str:
         cond = "Originalna kakovost, takoj na zalogi." if "original" in d["name"].lower() else "Takoj na zalogi."
     if d["discount"]:
         deal = rnd.choice([f"{name}. Zdaj samo {price}.",
-                           f"{name} je znižan za {d['discount']} odstotkov. Cena je le še {price}."])
+                           f"{name} je znižan za {d['discount']} {_plural(d['discount'], 'odstotek', 'odstotka', 'odstotke', 'odstotkov')}. "
+                           f"Cena je le še {price}."]) if d["discount"] >= 5 else f"{name}. Zdaj po znižani ceni {price}."
     else:
         deal = f"{name}. Cena je {price}."
     cta = rnd.choice(["Naročite na mobitrgovina pika com.",
