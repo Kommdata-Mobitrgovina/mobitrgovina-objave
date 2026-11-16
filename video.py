@@ -80,6 +80,9 @@ def cutout(raw: bytes, box: int) -> Image.Image:
             r, g, b, a = px[x, y]
             if r > 244 and g > 244 and b > 244:
                 px[x, y] = (r, g, b, 0)
+    bbox = im.getbbox()
+    if bbox:
+        im = im.crop(bbox)  # brez prosojnega roba, da senca sede tik pod izdelek
     im.thumbnail((box, box), Image.LANCZOS)
     return im
 
