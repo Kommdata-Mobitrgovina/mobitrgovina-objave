@@ -1,12 +1,12 @@
-"""Izdela navpičen video (1080x1920, ~10 s) za en izdelek: slike + ime + cena.
+"""Navpični videi (1080x1920) za FB/IG Reels: izdelek ali oglas za odkup.
 
-Okvirje riše Pillow, ffmpeg jih zapiše v MP4 (H.264 + tiha zvočna sled),
-ki ga sprejmeta Facebook in Instagram Reels.
+Vsak video dobi naključen slog (barve, postavitev, vrstni red prizorov), glas in glasbeno podlago,
+tako da si objave niso podobne kot jajce jajcu.
 """
 from __future__ import annotations
 
 import io
-import math
+import random
 import subprocess
 from pathlib import Path
 
@@ -16,12 +16,20 @@ W, H = 1080, 1920
 FPS = 30
 FONT_DIR = Path(__file__).parent / "fonts"
 
-NAVY = (16, 32, 64)
-ACCENT = (230, 40, 55)      # rdeča za akcijo
-GREEN = (20, 140, 90)
-GREY = (110, 118, 130)
-BG_TOP = (238, 242, 248)
-BG_BOTTOM = (255, 255, 255)
+THEMES = {
+    "svetla": dict(top=(238, 242, 248), bottom=(255, 255, 255), text=(16, 32, 64), sub=(105, 114, 128),
+                   accent=(230, 40, 55), head=(16, 32, 64), head_text=(255, 255, 255), card=(255, 255, 255),
+                   chip=(232, 238, 248), glow=None),
+    "temna": dict(top=(12, 15, 22), bottom=(30, 37, 52), text=(255, 255, 255), sub=(170, 180, 196),
+                  accent=(255, 196, 0), head=(255, 196, 0), head_text=(12, 15, 22), card=(40, 48, 66),
+                  chip=(48, 58, 80), glow=(255, 196, 0)),
+    "modra": dict(top=(18, 52, 120), bottom=(70, 30, 140), text=(255, 255, 255), sub=(205, 215, 240),
+                  accent=(255, 90, 95), head=(255, 255, 255), head_text=(30, 45, 120), card=(255, 255, 255),
+                  chip=(255, 255, 255, 40), glow=(140, 170, 255)),
+    "rdeca": dict(top=(200, 20, 40), bottom=(120, 10, 30), text=(255, 255, 255), sub=(255, 215, 215),
+                  accent=(255, 220, 0), head=(255, 255, 255), head_text=(180, 20, 35), card=(255, 255, 255),
+                  chip=(255, 255, 255, 45), glow=(255, 120, 120)),
+}
 
 
 def font(weight: str, size: int) -> ImageFont.FreeTypeFont:
@@ -37,7 +45,7 @@ def fmt_price(v: float) -> str:
     return f"{v:,.2f}".replace(",", " ").replace(".", ",") + " €"
 
 
-def wrap(draw: ImageDraw.ImageDraw, text: str, fnt, max_w: int, max_lines: int = 3) -> list[str]:
+def wrap(draw, text, fnt, max_w, max_lines=3):
     words, lines, cur = text.split(), [], ""
     for w in words:
         test = (cur + " " + w).strip()
@@ -55,164 +63,289 @@ def wrap(draw: ImageDraw.ImageDraw, text: str, fnt, max_w: int, max_lines: int =
     return lines
 
 
-def background() -> Image.Image:
-    bg = Image.new("RGB", (W, H), BG_BOTTOM)
-    d = ImageDraw.Draw(bg)
+def gradient(top, bottom) -> Image.Image:
+    col = Image.new("RGB", (1, H))
     for y in range(H):
-        k = y / H
-        c = tuple(int(BG_TOP[i] * (1 - k) + BG_BOTTOM[i] * k) for i in range(3))
-        d.line([(0, y), (W, y)], fill=c)
-    return bg
+        k = y / (H - 1)
+        col.putpixel((0, y), tuple(int(top[i] * (1 - k) + bottom[i] * k) for i in range(3)))
+    return col.resize((W, H))
 
 
-def prepare_product_image(raw: bytes, box: int = 880) -> Image.Image:
+def cutout(raw: bytes, box: int) -> Image.Image:
     im = Image.open(io.BytesIO(raw)).convert("RGBA")
-    # bela ozadja izdelkov naredimo prosojna, da se zlijejo z ozadjem
-    px = im.getdata()
-    im.putdata([(r, g, b, 0) if r > 245 and g > 245 and b > 245 else (r, g, b, a) for r, g, b, a in px])
+    im.thumbnail((1200, 1200))
+    px = im.load()
+    for y in range(im.height):
+        for x in range(im.width):
+            r, g, b, a = px[x, y]
+            if r > 244 and g > 244 and b > 244:
+                px[x, y] = (r, g, b, 0)
     im.thumbnail((box, box), Image.LANCZOS)
     return im
 
 
-class Renderer:
-    def __init__(self, product: dict, images: list[bytes]):
-        self.p = product
-        self.imgs = [prepare_product_image(b) for b in images[:3]] or []
-        self.bg = background()
-        self.f_brand = font("Bold", 54)
-        self.f_tag = font("Bold", 46)
-        self.f_name = font("Bold", 64)
-        self.f_info = font("Medium", 44)
-        self.f_old = font("Medium", 62)
-        self.f_price = font("Bold", 150)
-        self.f_cta = font("Bold", 58)
-        self.f_small = font("Regular", 40)
+class Base:
+    def __init__(self, theme: str | None, rnd: random.Random):
+        self.rnd = rnd
+        self.tname = theme or rnd.choice(list(THEMES))
+        self.t = THEMES[self.tname]
+        self.bg = gradient(self.t["top"], self.t["bottom"]).convert("RGBA")
+        if self.t["glow"]:
+            glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            gd = ImageDraw.Draw(glow)
+            gx, gy = rnd.choice([(W // 2, 760), (W // 3, 650), (2 * W // 3, 820)])
+            gd.ellipse([gx - 480, gy - 480, gx + 480, gy + 480], fill=self.t["glow"] + (70,))
+            self.bg.alpha_composite(glow.filter(ImageFilter.GaussianBlur(160)))
+        self.header_style = rnd.choice(["pill", "line"])
 
-    # ---- elementi -------------------------------------------------------
-    def header(self, d: ImageDraw.ImageDraw):
-        d.rounded_rectangle([60, 70, W - 60, 190], radius=36, fill=NAVY)
-        d.text((W // 2, 130), "MobiTrgovina", font=self.f_brand, fill="white", anchor="mm")
+    def header(self, d):
+        t = self.t
+        if self.header_style == "pill":
+            d.rounded_rectangle([60, 70, W - 60, 185], radius=58, fill=t["head"])
+            d.text((W // 2, 128), "MobiTrgovina", font=font("Bold", 52), fill=t["head_text"], anchor="mm")
+        else:
+            d.text((70, 128), "MobiTrgovina", font=font("Bold", 56), fill=t["text"], anchor="lm")
+            d.text((W - 70, 128), "mobitrgovina.com", font=font("Medium", 34), fill=t["sub"], anchor="rm")
+            d.line([(70, 190), (W - 70, 190)], fill=t["accent"], width=5)
 
-    def tag(self, d: ImageDraw.ImageDraw, alpha: float):
-        if alpha <= 0:
-            return
-        label, color = self.p["tag"], (ACCENT if self.p.get("discount") else GREEN)
-        tw = d.textlength(label, font=self.f_tag) + 70
-        x = int(60 - (1 - ease(alpha)) * 400)
-        d.rounded_rectangle([x, 230, x + tw, 320], radius=45, fill=color)
-        d.text((x + tw / 2, 275), label, font=self.f_tag, fill="white", anchor="mm")
-        if self.p.get("discount"):
-            r = 110
-            cx, cy = W - 60 - r, 300
-            s = ease(alpha)
-            rr = int(r * s)
-            d.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], fill=ACCENT)
-            if s > 0.6:
-                d.text((cx, cy), f"-{self.p['discount']}%", font=font("Bold", 64), fill="white", anchor="mm")
-
-    def product(self, frame: Image.Image, idx: int, t: float, top: int = 380):
-        if not self.imgs:
-            return
-        im = self.imgs[idx % len(self.imgs)]
-        z = 1.0 + 0.07 * t  # počasen zoom
+    def place(self, frame, im, cx, cy, z=1.0, shadow=True):
         w, h = int(im.width * z), int(im.height * z)
         imz = im.resize((w, h), Image.LANCZOS)
-        cx, cy = W // 2, top + 470
-        # mehka senca
-        shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        sd = ImageDraw.Draw(shadow)
-        sd.ellipse([cx - w // 2.6, cy + h // 2 - 30, cx + w // 2.6, cy + h // 2 + 30], fill=(0, 0, 0, 60))
-        shadow = shadow.filter(ImageFilter.GaussianBlur(25))
-        frame.alpha_composite(shadow)
-        frame.alpha_composite(imz, (cx - w // 2, cy - h // 2))
+        if shadow:
+            sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            ImageDraw.Draw(sh).ellipse([cx - w * 0.38, cy + h / 2 - 28, cx + w * 0.38, cy + h / 2 + 28],
+                                       fill=(0, 0, 0, 70))
+            frame.alpha_composite(sh.filter(ImageFilter.GaussianBlur(24)))
+        frame.alpha_composite(imz, (int(cx - w / 2), int(cy - h / 2)))
 
-    def name_block(self, d: ImageDraw.ImageDraw, alpha: float, y0: int = 1400):
-        if alpha <= 0:
+    def footer(self, d, text="Dostava po vsej Sloveniji · Garancija"):
+        d.text((W // 2, H - 95), text, font=font("Regular", 38), fill=self.t["sub"], anchor="mm")
+
+
+class ProductVideo(Base):
+    def __init__(self, p: dict, images: list[bytes], theme=None, seed=None):
+        super().__init__(theme, random.Random(seed))
+        self.p = p
+        self.imgs = [cutout(b, 860) for b in images[:3]]
+        self.small = [cutout(b, 520) for b in images[:3]]
+        self.mid_variant = self.rnd.choice(["chips", "split"])
+
+    def tag(self, d, a):
+        if a <= 0:
             return
-        dy = int((1 - ease(alpha)) * 80)
-        lines = wrap(d, self.p["name"], self.f_name, W - 160, 2)
-        y = y0 + dy
-        for ln in lines:
-            d.text((W // 2, y), ln, font=self.f_name, fill=NAVY, anchor="mm")
-            y += 84
-        info = self.p.get("info", [])
-        for ln in info[:2]:
-            d.text((W // 2, y + 20), ln, font=self.f_info, fill=GREY, anchor="mm")
-            y += 62
+        t, p = self.t, self.p
+        label = p["tag"]
+        f = font("Bold", 44)
+        tw = d.textlength(label, font=f) + 70
+        x = int(60 - (1 - ease(a)) * 420)
+        d.rounded_rectangle([x, 230, x + tw, 318], radius=44, fill=t["accent"])
+        d.text((x + tw / 2, 274), label, font=f, fill=(255, 255, 255) if self.tname != "temna" else (12, 15, 22),
+               anchor="mm")
+        if p.get("discount"):
+            r = int(108 * ease(a))
+            cx, cy = W - 170, 300
+            d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=t["accent"])
+            if a > 0.6:
+                d.text((cx, cy), f"-{p['discount']}%", font=font("Bold", 62),
+                       fill=(255, 255, 255) if self.tname != "temna" else (12, 15, 22), anchor="mm")
 
-    def price_card(self, d: ImageDraw.ImageDraw, alpha: float):
-        a = ease(alpha)
-        top = int(1180 + (1 - a) * 300)
-        d.rounded_rectangle([60, top, W - 60, top + 560], radius=50, fill="white", outline=(225, 230, 238), width=4)
-        y = top + 90
-        if self.p.get("regular") and self.p["regular"] > self.p["price"]:
-            old = fmt_price(self.p["regular"])
-            d.text((W // 2, y), old, font=self.f_old, fill=GREY, anchor="mm")
-            ow = d.textlength(old, font=self.f_old)
-            d.line([(W // 2 - ow / 2 - 8, y + 4), (W // 2 + ow / 2 + 8, y + 4)], fill=ACCENT, width=7)
+    def name(self, d, a, y0=1390):
+        if a <= 0:
+            return
+        y = y0 + int((1 - ease(a)) * 90)
+        for ln in wrap(d, self.p["name"], font("Bold", 66), W - 150, 2):
+            d.text((W // 2, y), ln, font=font("Bold", 66), fill=self.t["text"], anchor="mm")
+            y += 86
+        for ln in self.p.get("info", [])[:2]:
+            d.text((W // 2, y + 22), ln, font=font("Medium", 42), fill=self.t["sub"], anchor="mm")
+            y += 60
+
+    def chips(self, frame, d, a):
+        items = [x for x in (self.p.get("chips") or []) if x][:4]
+        y = 1290
+        for i, txt in enumerate(items):
+            ai = ease(a * 2.2 - i * 0.35)
+            if ai <= 0:
+                continue
+            f = font("Medium", 44)
+            tw = d.textlength(txt, font=f) + 140
+            x = W // 2 - tw / 2 + (1 - ai) * 200
+            chip = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            cd = ImageDraw.Draw(chip)
+            col = self.t["chip"] if len(self.t["chip"]) == 4 else self.t["chip"] + (255,)
+            cd.rounded_rectangle([x, y, x + tw, y + 96], radius=48, fill=col[:3] + (int(col[3] * ai),))
+            frame.alpha_composite(chip)
+            d = ImageDraw.Draw(frame)
+            d.line([(x + 40, y + 50), (x + 55, y + 64), (x + 82, y + 34)], fill=self.t["accent"], width=8, joint="curve")
+            d.text((x + 105, y + 48), txt, font=f, fill=self.t["text"], anchor="lm")
+            y += 120
+        return ImageDraw.Draw(frame)
+
+    def price(self, d, a):
+        t, p = self.t, self.p
+        e = ease(a)
+        top = int(1150 + (1 - e) * 320)
+        d.rounded_rectangle([60, top, W - 60, top + 580], radius=54, fill=(255, 255, 255))
+        ink = (16, 32, 64)
+        y = top + 95
+        if p.get("regular") and p["regular"] > p["price"]:
+            old = fmt_price(p["regular"])
+            fo = font("Medium", 60)
+            d.text((W // 2, y), old, font=fo, fill=(120, 128, 140), anchor="mm")
+            ow = d.textlength(old, font=fo)
+            d.line([(W // 2 - ow / 2 - 8, y + 4), (W // 2 + ow / 2 + 8, y + 4)], fill=(230, 40, 55), width=7)
             y += 150
         else:
-            y += 60
-        d.text((W // 2, y), fmt_price(self.p["price"]), font=self.f_price,
-               fill=ACCENT if self.p.get("discount") else NAVY, anchor="mm")
-        y += 170
-        d.rounded_rectangle([170, y - 55, W - 170, y + 55], radius=55, fill=NAVY)
-        d.text((W // 2, y), "mobitrgovina.com", font=self.f_cta, fill="white", anchor="mm")
+            y += 65
+        d.text((W // 2, y), fmt_price(p["price"]), font=font("Bold", 150),
+               fill=(230, 40, 55) if p.get("discount") else ink, anchor="mm")
+        y += 175
+        d.rounded_rectangle([160, y - 56, W - 160, y + 56], radius=56, fill=ink)
+        d.text((W // 2, y), "mobitrgovina.com", font=font("Bold", 56), fill=(255, 255, 255), anchor="mm")
 
-    def footer(self, d: ImageDraw.ImageDraw):
-        d.text((W // 2, H - 90), "Dostava po vsej Sloveniji · Garancija", font=self.f_small, fill=GREY, anchor="mm")
-
-    # ---- prizori --------------------------------------------------------
-    def frame(self, sec: float) -> Image.Image:
-        f = self.bg.convert("RGBA")
+    def frame(self, s: float, T: float) -> Image.Image:
+        c1, c2 = T * 0.36, T * 0.66
+        f = self.bg.copy()
         d = ImageDraw.Draw(f)
         self.header(d)
-        if sec < 3.6:                               # 1: slika + ime
-            t = sec / 3.6
-            self.product(f, 0, t)
+        n = len(self.imgs)
+        if s < c1:
+            if n:
+                self.place(f, self.imgs[0], W // 2, 850, 1 + 0.08 * s / c1)
             d = ImageDraw.Draw(f)
-            self.tag(d, sec / 0.6)
-            self.name_block(d, (sec - 0.4) / 0.6)
-        elif sec < 6.6:                             # 2: druga slika + stanje
-            t = (sec - 3.6) / 3.0
-            self.product(f, 1, t)
+            self.tag(d, s / 0.6)
+            self.name(d, (s - 0.4) / 0.6)
+        elif s < c2:
+            u = (s - c1) / (c2 - c1)
+            if self.mid_variant == "split" and n:
+                self.place(f, self.small[1 % n], W // 2, 760, 1 + 0.06 * u)
+                d = self.chips(f, ImageDraw.Draw(f), u)
+            else:
+                if n:
+                    self.place(f, self.imgs[1 % n], W // 2, 850, 1.08 - 0.06 * u)
+                d = ImageDraw.Draw(f)
+                self.name(d, 1)
+            self.tag(d, 1)
+        else:
+            u = (s - c2) / (T - c2)
+            if n:
+                self.place(f, self.small[2 % n] if n > 2 else self.small[0], W // 2, 700, 1 + 0.06 * u)
             d = ImageDraw.Draw(f)
             self.tag(d, 1)
-            self.name_block(d, 1)
-        else:                                       # 3: cena + poziv
-            t = (sec - 6.6) / 3.4
-            self.product(f, 2 if len(self.imgs) > 2 else 0, t, top=260)
-            d = ImageDraw.Draw(f)
-            self.tag(d, 1)
-            self.price_card(d, t / 0.25)
+            self.price(d, u / 0.22)
         self.footer(d)
         return f.convert("RGB")
 
+    def cuts(self, T):
+        return [T * 0.36, T * 0.66]
 
-def render(product: dict, images: list[bytes], out: Path, seconds: float = 10.0) -> Path:
-    r = Renderer(product, images)
-    n = int(seconds * FPS)
-    fade = int(0.35 * FPS)
-    cuts = [int(3.6 * FPS), int(6.6 * FPS)]
-    cmd = [
-        "ffmpeg", "-y", "-loglevel", "error",
-        "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
-        "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
-        "-shortest", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-        "-pix_fmt", "yuv420p", "-profile:v", "high", "-c:a", "aac", "-b:a", "128k",
-        "-movflags", "+faststart", str(out),
+
+class BuybackVideo(Base):
+    STEPS = [
+        ["Prinesite telefon ali tablico", "Strokovno ga pregledamo", "Gotovina takoj ali menjava"],
+        ["Pridite v našo prodajalno", "Ocenimo vaš aparat", "Izplačilo v gotovini"],
+        ["Prinesite star aparat", "Hitra in poštena ocena", "Denar ali nov telefon"],
     ]
+    HEADS = [("GOTOVINSKI", "ODKUP"), ("ODKUPIMO", "VAŠ TELEFON"), ("STAR TELEFON", "= GOTOVINA")]
+
+    def __init__(self, images: list[bytes], theme=None, seed=None):
+        super().__init__(theme, random.Random(seed))
+        self.imgs = [cutout(b, 520) for b in images[:3]]
+        self.steps = self.rnd.choice(self.STEPS)
+        self.head = self.rnd.choice(self.HEADS)
+
+    def frame(self, s: float, T: float) -> Image.Image:
+        t = self.t
+        c1, c2 = T * 0.34, T * 0.70
+        f = self.bg.copy()
+        d = ImageDraw.Draw(f)
+        self.header(d)
+        if s < c1:
+            u = s / c1
+            pos = [(W // 2 - 270, 800, -12), (W // 2 + 270, 800, 12), (W // 2, 760, 0)]
+            for i, im in enumerate(self.imgs[:3]):
+                a = ease(u * 3 - i * 0.4)
+                if a <= 0:
+                    continue
+                x, y, rot = pos[i if len(self.imgs) > 1 else 2]
+                r = im.rotate(rot * a, expand=True, resample=Image.BICUBIC)
+                self.place(f, r, x, y + (1 - a) * 300, 0.9 + 0.1 * a)
+            d = ImageDraw.Draw(f)
+            a = ease((s - 0.3) / 0.7)
+            y = 1300 + int((1 - a) * 80)
+            d.text((W // 2, y), self.head[0], font=font("Bold", 104), fill=t["text"], anchor="mm")
+            d.text((W // 2, y + 125), self.head[1], font=font("Bold", 104), fill=t["accent"], anchor="mm")
+            d.text((W // 2, y + 245), "mobilnih telefonov in tablic", font=font("Medium", 48), fill=t["sub"],
+                   anchor="mm")
+        elif s < c2:
+            u = (s - c1) / (c2 - c1)
+            d.text((W // 2, 330), "Kako poteka?", font=font("Bold", 84), fill=t["text"], anchor="mm")
+            for i, txt in enumerate(self.steps):
+                a = ease(u * 2.4 - i * 0.45)
+                if a <= 0:
+                    continue
+                y = 560 + i * 330
+                x = 110 + (1 - a) * -300
+                d.ellipse([x, y, x + 170, y + 170], fill=t["accent"])
+                d.text((x + 85, y + 85), str(i + 1), font=font("Bold", 92),
+                       fill=(12, 15, 22) if self.tname == "temna" else (255, 255, 255), anchor="mm")
+                lines = wrap(d, txt, font("Bold", 56), int(W - x - 290), 2)
+                y0 = y + 85 - (len(lines) - 1) * 36
+                for k, ln in enumerate(lines):
+                    d.text((x + 215, y0 + k * 72), ln, font=font("Bold", 56), fill=t["text"], anchor="lm")
+        else:
+            u = (s - c2) / (T - c2)
+            a = ease(u / 0.25)
+            top = int(520 + (1 - a) * 260)
+            d.rounded_rectangle([60, top, W - 60, top + 900], radius=56, fill=(255, 255, 255))
+            ink = (16, 32, 64)
+            d.text((W // 2, top + 130), "Staro za novo", font=font("Bold", 86), fill=ink, anchor="mm")
+            d.text((W // 2, top + 235), "ali gotovina na roko", font=font("Medium", 54), fill=(110, 118, 130),
+                   anchor="mm")
+            for k, ln in enumerate(["Odkupujemo delujoče in", "nepoškodovane aparate"]):
+                d.text((W // 2, top + 380 + k * 64), ln, font=font("Regular", 46), fill=(110, 118, 130), anchor="mm")
+            y = top + 640
+            d.rounded_rectangle([110, y - 62, W - 110, y + 62], radius=62, fill=(230, 40, 55))
+            d.text((W // 2, y), "Pridite k nam!", font=font("Bold", 60), fill=(255, 255, 255), anchor="mm")
+            d.text((W // 2, y + 140), "mobitrgovina.com/odkup-telefona", font=font("Bold", 44), fill=ink, anchor="mm")
+        self.footer(d, "Hitro · Pošteno · Brez skrbi")
+        return f.convert("RGB")
+
+    def cuts(self, T):
+        return [T * 0.34, T * 0.70]
+
+
+def render(r: Base, out: Path, seconds: float, music: Path | None = None, voice: Path | None = None) -> Path:
+    T = max(9.0, seconds)
+    n = int(T * FPS)
+    fade = int(0.35 * FPS)
+    cuts = [int(c * FPS) for c in r.cuts(T)]
+    cmd = ["ffmpeg", "-y", "-loglevel", "error",
+           "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-"]
+    if music:
+        cmd += ["-i", str(music)]
+    else:
+        cmd += ["-f", "lavfi", "-t", str(T), "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
+    if voice:
+        cmd += ["-i", str(voice)]
+        filt = ("[1:a]volume=0.55[m];[2:a]adelay=450|450,volume=1.5,aformat=channel_layouts=stereo,asplit[v1][v2];"
+                "[m][v1]sidechaincompress=threshold=0.03:ratio=6:attack=30:release=350[md];"
+                f"[md][v2]amix=inputs=2:normalize=0,atrim=0:{T},afade=t=out:st={T - 0.8}:d=0.8[a]")
+    else:
+        filt = f"[1:a]volume=0.8,atrim=0:{T},afade=t=out:st={T - 0.8}:d=0.8[a]"
+    cmd += ["-filter_complex", filt, "-map", "0:v", "-map", "[a]",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-profile:v", "high",
+            "-c:a", "aac", "-b:a", "160k", "-t", str(T), "-movflags", "+faststart", str(out)]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-    prev = None
+    cache = {}
     for i in range(n):
-        cur = r.frame(i / FPS)
-        # mehak prehod med prizori
+        cur = r.frame(i / FPS, T)
         for c in cuts:
-            if c <= i < c + fade and prev is not None:
-                k = (i - c) / fade
-                cur = Image.blend(r.frame((c - 1) / FPS), cur, k)
+            if c <= i < c + fade:
+                if c not in cache:
+                    cache[c] = r.frame((c - 1) / FPS, T)
+                cur = Image.blend(cache[c], cur, (i - c) / fade)
         proc.stdin.write(cur.tobytes())
-        prev = cur
     proc.stdin.close()
     if proc.wait() != 0:
         raise RuntimeError("ffmpeg ni uspel")
