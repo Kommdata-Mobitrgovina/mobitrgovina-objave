@@ -1,4 +1,6 @@
-"""Ena objava. SLOT=izdelek (privzeto) ali SLOT=odkup (dnevni oglas za gotovinski odkup)."""
+"""Ena objava.
+SLOT=izdelek (privzeto) ali SLOT=odkup (oglas za gotovinski odkup);
+FORMAT=story (zgodba na FB in IG, privzeto) ali FORMAT=reel (objava na zidu kot Reel)."""
 from __future__ import annotations
 
 import os
@@ -16,6 +18,7 @@ import video
 def main() -> int:
     dry = os.environ.get("DRY_RUN") == "1"
     slot = os.environ.get("SLOT", "izdelek")
+    fmt = os.environ.get("FORMAT", "story")
     rnd = random.Random()
     st = social.load_state()
     out_dir = Path("out")
@@ -50,20 +53,25 @@ def main() -> int:
     mp4 = out_dir / f"{key}.mp4"
     video.render(renderer, mp4, seconds, music=bed, voice=voice[0] if voice else None)
     mp4.with_suffix(".txt").write_text(f"{text}\n\n--- govor ---\n{script}\n--- slog: {renderer.tname} ---")
-    print(f"{slot}: {name}\nslog: {renderer.tname}\n\n{text}\n\nGovor: {script}\nVideo: {mp4}")
+    print(f"{slot} / {fmt}: {name}\nslog: {renderer.tname}\n\n{text}\n\nGovor: {script}\nVideo: {mp4}")
     if dry:
         print("DRY_RUN: nič objavljeno.")
         return 0
 
     ok = False
-    for label, fn in (("Facebook", social.post_facebook_reel), ("Instagram", social.post_instagram_reel)):
+    targets = ((("Facebook zgodba", social.post_facebook_story), ("Instagram zgodba", social.post_instagram_story))
+               if fmt == "story" else
+               (("Facebook Reel", social.post_facebook_reel), ("Instagram Reel", social.post_instagram_reel)))
+    for label, fn in targets:
         try:
             print(f"{label}: objavljeno {fn(mp4, text)}")
             ok = True
         except Exception as e:  # ena platforma ne sme ustaviti druge
             print(f"{label}: NAPAKA {e}", file=sys.stderr)
     if ok:
-        st[key] = datetime.now(timezone.utc).isoformat()
+        st[key if fmt == "story" else f"{key}-reel"] = datetime.now(timezone.utc).isoformat()
+        if fmt == "reel":
+            st[key] = st[f"{key}-reel"]
         social.save_state(st)
     return 0 if ok else 1
 
