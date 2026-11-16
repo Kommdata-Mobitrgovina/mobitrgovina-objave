@@ -290,3 +290,37 @@ def post_instagram_reel(video: Path, text: str) -> str:
     pub = _check(requests.post(f"{GRAPH}/{ig}/media_publish", timeout=60,
                                data={"creation_id": cid, "access_token": tok}))
     return pub["id"]
+
+# ---------------------------------------------------------------- zgodbe (stories)
+def post_facebook_story(video: Path, text: str = "") -> str:
+    page, tok = os.environ["FB_PAGE_ID"], os.environ["FB_PAGE_TOKEN"]
+    start = _check(requests.post(f"{GRAPH}/{page}/video_stories",
+                                 data={"upload_phase": "start", "access_token": tok}, timeout=60))
+    vid = start["video_id"]
+    size = video.stat().st_size
+    with video.open("rb") as fh:
+        _check(requests.post(start["upload_url"], data=fh, timeout=600,
+                             headers={"Authorization": f"OAuth {tok}", "offset": "0", "file_size": str(size)}))
+    res = _check(requests.post(f"{GRAPH}/{page}/video_stories", timeout=60, data={
+        "upload_phase": "finish", "video_id": vid, "access_token": tok}))
+    return res.get("post_id", vid)
+
+
+def post_instagram_story(video: Path, text: str = "") -> str:
+    ig, tok = os.environ["IG_USER_ID"], os.environ["FB_PAGE_TOKEN"]
+    c = _check(requests.post(f"{GRAPH}/{ig}/media", timeout=60, data={
+        "media_type": "STORIES", "upload_type": "resumable", "access_token": tok}))
+    cid, size = c["id"], video.stat().st_size
+    with video.open("rb") as fh:
+        _check(requests.post(c["uri"], data=fh, timeout=600,
+                             headers={"Authorization": f"OAuth {tok}", "offset": "0", "file_size": str(size)}))
+    for _ in range(40):
+        st = _check(requests.get(f"{GRAPH}/{cid}", params={"fields": "status_code", "access_token": tok}, timeout=60))
+        if st.get("status_code") == "FINISHED":
+            break
+        if st.get("status_code") == "ERROR":
+            raise RuntimeError(f"Instagram ni sprejel zgodbe: {st}")
+        time.sleep(15)
+    pub = _check(requests.post(f"{GRAPH}/{ig}/media_publish", timeout=60,
+                               data={"creation_id": cid, "access_token": tok}))
+    return pub["id"]
