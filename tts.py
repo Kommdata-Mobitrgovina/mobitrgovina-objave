@@ -1,0 +1,25 @@
+"""Slovenski glas (Microsoft Edge nevronski glasovi prek paketa edge-tts)."""
+from __future__ import annotations
+
+import asyncio
+import random
+import subprocess
+from pathlib import Path
+
+VOICES = ["sl-SI-RokNeural", "sl-SI-PetraNeural"]
+
+
+def speak(text: str, out: Path, voice: str | None = None) -> tuple[Path, float] | None:
+    """Vrne (mp3, trajanje v s) ali None, če glas ni na voljo – video gre potem samo z glasbo."""
+    try:
+        import edge_tts
+
+        v = voice or random.choice(VOICES)
+        rate = random.choice(["+0%", "+5%", "+8%"])
+        asyncio.run(edge_tts.Communicate(text, v, rate=rate).save(str(out)))
+        dur = float(subprocess.check_output(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(out)]).strip())
+        return out, dur
+    except Exception as e:  # brez glasu raje objavimo kot nič
+        print(f"Glas ni uspel: {e}")
+        return None
