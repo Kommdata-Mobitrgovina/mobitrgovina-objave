@@ -1,6 +1,7 @@
 """Ena objava.
 SLOT=izdelek (privzeto) ali SLOT=odkup (oglas za gotovinski odkup);
-FORMAT=story (zgodba na FB in IG, privzeto) ali FORMAT=reel (objava na zidu kot Reel)."""
+FORMAT=story (zgodba na FB in IG, privzeto), FORMAT=reel (objava na zidu kot Reel)
+ali FORMAT=tiktok (angleški video za EU, pošlje se Marku na Telegram za objavo na TikToku)."""
 from __future__ import annotations
 
 import os
@@ -25,6 +26,9 @@ def main() -> int:
     out_dir = Path("out")
     out_dir.mkdir(exist_ok=True)
     products = social.candidates()
+
+    if fmt == "tiktok":
+        return tiktok(dry, st, products, rnd, out_dir)
 
     if slot == "odkup":
         key = "odkup-" + datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -81,6 +85,36 @@ def main() -> int:
             st[key] = st[f"{key}-reel"]
         social.save_state(st)
     return 0 if ok else 1
+
+
+def tiktok(dry, st, products, rnd, out_dir) -> int:
+    seen = {k[:-3]: v for k, v in st.items() if k.endswith("-tt")}
+    p = social.pick([x for x in products if social.is_phone(x)], seen, rnd)
+    if not p:
+        print("Ni telefonov za TikTok.")
+        return 0
+    d = social.describe(p)
+    screen_hook, spoken_hook = social.tiktok_hook(d, rnd)
+    script = social.tiktok_script(d, spoken_hook, rnd)
+    text = social.tiktok_caption(d, screen_hook, rnd)
+    key = f"{p['id']}-tt"
+    renderer = video.ProductVideo(social.describe_en(d), social.download_images(p), en=True, hook=screen_hook)
+    voice = tts.speak(script, out_dir / f"{key}.mp3", en=True)
+    seconds = (voice[1] + 1.8) if voice else 10.0
+    bed = music.make(out_dir / f"{key}.wav", max(9.0, seconds) + 0.5)
+    mp4 = out_dir / f"{key}.mp4"
+    video.render(renderer, mp4, seconds, music=bed, voice=voice[0] if voice else None)
+    mp4.with_suffix(".txt").write_text(f"{text}\n\n--- voice ---\n{script}")
+    print(f"tiktok: {d['name']}\n\n{text}\n\nVoice: {script}")
+    head = ("🧪 Preizkus – " if dry else "") + "🎵 TikTok video je pripravljen. Objavi ga s telefona, besedilo je spodaj."
+    if not obvestila.send_video(mp4, head):
+        print("Video na Telegram ni šel.")
+        return 1
+    obvestila.send(text)
+    if not dry:
+        st[key] = datetime.now(timezone.utc).isoformat()
+        social.save_state(st)
+    return 0
 
 
 if __name__ == "__main__":
