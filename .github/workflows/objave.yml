@@ -57,6 +57,7 @@ jobs:
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
           SLOT: ${{ github.event_name == 'workflow_dispatch' && inputs.slot || (github.event.schedule == '15 11 * * *' && 'odkup' || 'izdelek') }}
           FORMAT: ${{ github.event_name == 'workflow_dispatch' && inputs.format || (github.event.schedule == '45 16 * * 1,3,5' && 'reel' || 'story') }}
@@ -72,5 +73,5 @@ jobs:
         run: |
           git config user.name "objave-bot"
           git config user.email "objave-bot@users.noreply.github.com"
-          git add state/posted.json || true
+          git add state/ || true
           git diff --cached --quiet || (git commit -m "Objavljeno $(date -u +%F\ %H:%M)" && git push)
