@@ -31,9 +31,11 @@ def _freq(m: int) -> float:
 
 def _env(n: int, a: float, r: float) -> np.ndarray:
     e = np.ones(n)
-    na, nr = int(a * SR), int(r * SR)
-    e[:na] = np.linspace(0, 1, na)
-    e[-nr:] *= np.linspace(1, 0, nr)
+    na, nr = min(int(a * SR), n // 2), min(int(r * SR), n // 2)  # kratek zadnji kos ne sme podreti glasbe
+    if na:
+        e[:na] = np.linspace(0, 1, na)
+    if nr:
+        e[-nr:] *= np.linspace(1, 0, nr)
     return e
 
 
