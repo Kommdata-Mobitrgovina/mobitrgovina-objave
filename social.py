@@ -369,3 +369,89 @@ def post_instagram_story(video: Path, text: str = "") -> str:
     pub = _check(requests.post(f"{GRAPH}/{ig}/media_publish", timeout=60,
                                data={"creation_id": cid, "access_token": tok}))
     return pub["id"]
+
+
+# ---------------------------------------------------------------- TikTok (angleško, za EU)
+EU_SHIPPING = "~€15"
+TAGS_EN = {"AKCIJA": "SALE", "NOVO V PONUDBI": "JUST IN", "RABLJENO": "PRE-OWNED", "NOVO": "BRAND NEW",
+           "DODATKI": "ACCESSORIES"}
+
+
+def describe_en(d: dict) -> dict:
+    """Angleška različica opisa za napise v videu."""
+    chips = []
+    for c in d["chips"]:
+        lc = c.lower()
+        num = re.search(r"\d+", c)
+        if lc == "nov aparat":
+            chips.append("Brand new")
+        elif "ohranjen" in lc:
+            chips.append("Great condition")
+        elif "omrežj" in lc:
+            chips.append("Unlocked")
+        elif "oprem" in lc:
+            chips.append("Full box")
+        elif "garancij" in lc:
+            chips.append(f"{num.group()}-month warranty" if num and "mesec" in lc else "Warranty")
+        elif "baterij" in lc:
+            chips.append(f"Battery {num.group()}%" if num else "Battery tested")
+    if not any("warranty" in c.lower() for c in chips):
+        chips.append("Warranty")
+    chips = list(dict.fromkeys(chips))[:3] + [f"EU shipping {EU_SHIPPING}"]
+    name = re.sub(r"\s+", " ", re.sub(r"\(.*?\)", " ", d["name"])).strip()
+    return {**d, "name": name, "tag": TAGS_EN.get(d["tag"], d["tag"]), "chips": chips,
+            "info": ["Pre-owned · tested" if d["used"] else "Brand new · sealed", "Ships across the EU"]}
+
+
+def _eur_en(v: float) -> str:
+    e, c = int(v), round((v - int(v)) * 100)
+    return f"{e} euros" + (f" {c:02d}" if c else "")
+
+
+def spoken_name_en(name: str) -> str:
+    s = re.sub(r"\(.*?\)", " ", name)
+    s = re.sub(r"\b(\d+)\s?GB\s?/\s?\d+\s?GB\b", r"\1 gigs", s, flags=re.I)
+    s = re.sub(r"\b(\d+)\s?GB\b", r"\1 gigs", s, flags=re.I)
+    s = re.sub(r"\bDual\s?SIM\b", " ", s, flags=re.I)
+    s = re.sub(r"\b5G\b", "5 G", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def tiktok_hook(d: dict, rnd: random.Random) -> tuple[str, str]:
+    """(napis na zaslonu, izgovorjen uvod)"""
+    p = int(d["price"])
+    opts = [("PRICE CHECK", "Price check!"),
+            (f"WOULD YOU PAY €{p} FOR THIS?", f"Would you pay {p} euros for this?"),
+            ("DON'T OVERPAY FOR YOUR NEXT PHONE", "Don't overpay for your next phone."),
+            ("JUST LANDED", "This one just landed in our shop.")]
+    if d["discount"] >= 5:
+        opts.append((f"-{d['discount']}% RIGHT NOW", f"{d['discount']} percent off, right now."))
+    if d["used"]:
+        opts.append(("FLAGSHIP FOR LESS", "Want a flagship without the flagship price?"))
+    return rnd.choice(opts)
+
+
+def tiktok_script(d: dict, spoken_hook: str, rnd: random.Random) -> str:
+    name = spoken_name_en(d["name"])
+    cond = "Pre-owned, tested, with warranty." if d["used"] else "Brand new, with warranty."
+    if d["discount"] and d["regular"]:
+        price = f"Was {_eur_en(d['regular'])}, now only {_eur_en(d['price'])}."
+    else:
+        price = f"Only {_eur_en(d['price'])}."
+    cta = rnd.choice(["We ship anywhere in the EU for about 15 euros. Link in bio!",
+                      "Shipping across the EU for around 15 euros. Grab it before it's gone. Link in bio!",
+                      "EU-wide delivery, about 15 euros. Check the link in our bio!"])
+    return f"{spoken_hook} The {name}. {cond} {price} {cta}"
+
+
+def tiktok_caption(d: dict, screen_hook: str, rnd: random.Random) -> str:
+    brands = ("apple", "iphone", "samsung", "xiaomi", "redmi", "poco", "huawei", "honor", "realme", "nokia",
+              "motorola", "oneplus", "google", "pixel", "oppo", "vivo", "sony", "nothing")
+    found = [w for w in re.findall(r"[a-z]+", d["name"].lower()) if w in brands][:2]
+    price = f"€{d['price']:,.2f}" + (f" (was €{d['regular']:,.2f})" if d["discount"] and d["regular"] else "")
+    first = rnd.choice(["📱", "🔥", "👀", "💸"]) + " " + screen_hook.capitalize()
+    tags = ["#phonedeals", "#smartphone", *[f"#{b}" for b in found], "#techtok",
+            "#refurbished" if d["used"] else "#newphone", "#europe", "#fyp", "#mobitrgovina"]
+    name = re.sub(r"\s+", " ", re.sub(r"\(.*?\)", " ", d["name"])).strip()
+    return "\n".join([first, f"{name} – {price}", "", f"🚚 EU shipping {EU_SHIPPING}",
+                      "✅ Warranty included", "🛒 mobitrgovina.com (link in bio)", "", " ".join(dict.fromkeys(tags))])
