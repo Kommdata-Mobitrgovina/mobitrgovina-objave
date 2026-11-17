@@ -197,7 +197,14 @@ def spoken_name(name: str, phone: bool = True) -> str:
                 continue
         if lw not in (x.lower() for x in words):
             words.append(w)
-    return re.sub(r"\s+", " ", " ".join(words)).strip()
+    return _loci_stevilke(" ".join(words))
+
+
+def _loci_stevilke(s: str) -> str:
+    """»A17« -> »A 17«, »15C« -> »15 C«: glas potem prebere »A sedemnajst« namesto »A ena sedem«."""
+    s = re.sub(r"(?<=[A-Za-zČŠŽčšž])(?=\d)", " ", s)
+    s = re.sub(r"(?<=\d)(?=[A-Za-zČŠŽčšž])", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
 
 
 def caption(d: dict, rnd: random.Random) -> str:
@@ -414,7 +421,7 @@ def spoken_name_en(name: str) -> str:
     s = re.sub(r"\b(\d+)\s?GB\b", r"\1 gigs", s, flags=re.I)
     s = re.sub(r"\bDual\s?SIM\b", " ", s, flags=re.I)
     s = re.sub(r"\b5G\b", "5 G", s)
-    return re.sub(r"\s+", " ", s).strip()
+    return _loci_stevilke(s)
 
 
 def tiktok_hook(d: dict, rnd: random.Random) -> tuple[str, str]:
