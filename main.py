@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import music
+import obvestila
 import social
 import tts
 import video
@@ -56,18 +57,24 @@ def main() -> int:
     print(f"{slot} / {fmt}: {name}\nslog: {renderer.tname}\n\n{text}\n\nGovor: {script}\nVideo: {mp4}")
     if dry:
         print("DRY_RUN: nič objavljeno.")
+        obvestila.send(f"🧪 Preizkus ({slot}/{fmt}): {name} – video narejen, nič objavljeno.")
         return 0
 
     ok = False
     targets = ((("Facebook zgodba", social.post_facebook_story), ("Instagram zgodba", social.post_instagram_story))
                if fmt == "story" else
                (("Facebook Reel", social.post_facebook_reel), ("Instagram Reel", social.post_instagram_reel)))
+    results = []
     for label, fn in targets:
         try:
             print(f"{label}: objavljeno {fn(mp4, text)}")
             ok = True
+            results.append(f"✅ {label}")
         except Exception as e:  # ena platforma ne sme ustaviti druge
             print(f"{label}: NAPAKA {e}", file=sys.stderr)
+            results.append(f"❌ {label}: {str(e)[:150]}")
+    vrsta = "Zgodba" if fmt == "story" else "Reel"
+    obvestila.send(f"{'📣' if ok else '⚠️'} {vrsta} – {name}\n" + "\n".join(results))
     if ok:
         st[key if fmt == "story" else f"{key}-reel"] = datetime.now(timezone.utc).isoformat()
         if fmt == "reel":
@@ -77,4 +84,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception as e:
+        obvestila.send(f"⚠️ Objava ni uspela: {str(e)[:300]}")
+        raise
