@@ -41,7 +41,9 @@ def ease(t: float) -> float:
     return 1 - (1 - t) ** 3
 
 
-def fmt_price(v: float) -> str:
+def fmt_price(v: float, en: bool = False) -> str:
+    if en:
+        return f"€{v:,.2f}"
     return f"{v:,.2f}".replace(",", " ").replace(".", ",") + " €"
 
 
@@ -136,9 +138,11 @@ class Base:
 
 
 class ProductVideo(Base):
-    def __init__(self, p: dict, images: list[bytes], theme=None, seed=None):
+    def __init__(self, p: dict, images: list[bytes], theme=None, seed=None, en=False, hook=None):
         super().__init__(theme, random.Random(seed))
         self.p = p
+        self.en = en
+        self.hook = hook  # TikTok: velik napis v prvi sekundi
         self.imgs = [cutout(b, 860) for b in images[:3]]
         self.small = [cutout(b, 520) for b in images[:3]]
         self.mid_variant = self.rnd.choice(["chips", "split"])
@@ -202,7 +206,7 @@ class ProductVideo(Base):
         ink = (16, 32, 64)
         y = top + 95
         if p.get("regular") and p["regular"] > p["price"]:
-            old = fmt_price(p["regular"])
+            old = fmt_price(p["regular"], self.en)
             fo = font("Medium", 60)
             d.text((W // 2, y), old, font=fo, fill=(120, 128, 140), anchor="mm")
             ow = d.textlength(old, font=fo)
@@ -210,14 +214,29 @@ class ProductVideo(Base):
             y += 150
         else:
             y += 65
-        d.text((W // 2, y), fmt_price(p["price"]), font=font("Bold", 150),
+        d.text((W // 2, y), fmt_price(p["price"], self.en), font=font("Bold", 150),
                fill=(230, 40, 55) if p.get("discount") else ink, anchor="mm")
         y += 175
         d.rounded_rectangle([160, y - 56, W - 160, y + 56], radius=56, fill=ink)
         d.text((W // 2, y), "mobitrgovina.com", font=font("Bold", 56), fill=(255, 255, 255), anchor="mm")
 
+    def hook_box(self, d, s):
+        """Velik napis čez spodnji del zaslona v prvi sekundi in pol (TikTok hook)."""
+        a = ease(s / 0.25) * (1 - ease((s - 1.35) / 0.25))
+        if a <= 0:
+            return
+        f = font("Bold", 92)
+        lines = wrap(d, self.hook, f, W - 200, 3)
+        h = len(lines) * 112 + 90
+        top = 1300 + int((1 - a) * 60)
+        d.rounded_rectangle([70, top, W - 70, top + h], radius=46, fill=self.t["accent"])
+        ink = (12, 15, 22) if self.tname in ("temna", "rdeca") else (255, 255, 255)
+        for k, ln in enumerate(lines):
+            d.text((W // 2, top + 45 + 56 + k * 112), ln, font=f, fill=ink, anchor="mm")
+
     def frame(self, s: float, T: float) -> Image.Image:
         c1, c2 = T * 0.36, T * 0.66
+        hk = 1.6 if self.hook else 0.0
         f = self.bg.copy()
         d = ImageDraw.Draw(f)
         self.header(d)
@@ -227,7 +246,10 @@ class ProductVideo(Base):
                 self.place(f, self.imgs[0], W // 2, 850, 1 + 0.08 * s / c1)
             d = ImageDraw.Draw(f)
             self.tag(d, s / 0.6)
-            self.name(d, (s - 0.4) / 0.6)
+            if self.hook and s < hk:
+                self.hook_box(d, s)
+            else:
+                self.name(d, (s - 0.4 - hk) / 0.6)
         elif s < c2:
             u = (s - c1) / (c2 - c1)
             if self.mid_variant == "split" and n:
@@ -246,7 +268,7 @@ class ProductVideo(Base):
             d = ImageDraw.Draw(f)
             self.tag(d, 1)
             self.price(d, u / 0.22)
-        self.footer(d)
+        self.footer(d, "EU shipping · Warranty" if self.en else "Dostava po vsej Sloveniji · Garancija")
         return f.convert("RGB")
 
     def cuts(self, T):
