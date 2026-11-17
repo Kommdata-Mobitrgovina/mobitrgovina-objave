@@ -13,8 +13,16 @@ CHAT_FILE = Path(__file__).parent / "state" / "telegram.json"
 def _chat_id(tok: str) -> int | None:
     if CHAT_FILE.exists():
         return json.loads(CHAT_FILE.read_text()).get("chat_id")
+    me = requests.get(f"https://api.telegram.org/bot{tok}/getMe", timeout=30).json()
+    print("Telegram bot:", me.get("result", {}).get("username"), "ok" if me.get("ok") else me.get("description"))
+    wh = requests.get(f"https://api.telegram.org/bot{tok}/getWebhookInfo", timeout=30).json()
+    if wh.get("result", {}).get("url"):
+        requests.get(f"https://api.telegram.org/bot{tok}/deleteWebhook", timeout=30)
+        print("Telegram: odstranjen webhook")
     r = requests.get(f"https://api.telegram.org/bot{tok}/getUpdates", timeout=30).json()
-    chats = [u["message"]["chat"]["id"] for u in r.get("result", []) if "message" in u]
+    print("Telegram getUpdates:", r.get("ok"), len(r.get("result", [])), r.get("description", ""))
+    chats = [u[k]["chat"]["id"] for u in r.get("result", [])
+             for k in ("message", "edited_message", "my_chat_member") if k in u]
     if not chats:
         print("Telegram: botu še nihče ni pisal – pošlji mu »start«.")
         return None
