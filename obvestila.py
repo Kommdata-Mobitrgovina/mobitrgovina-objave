@@ -42,3 +42,24 @@ def send(text: str) -> None:
                           data={"chat_id": cid, "text": text, "disable_web_page_preview": "true"})
     except Exception as e:  # obvestilo ne sme podreti objave
         print(f"Telegram ni uspel: {e}")
+
+
+def send_video(path, caption: str) -> bool:
+    """Pošlje video (do 50 MB) na Telegram; vrne True, če je uspelo."""
+    tok = os.environ.get("TELEGRAM_TOKEN")
+    if not tok:
+        return False
+    try:
+        cid = _chat_id(tok)
+        if not cid:
+            return False
+        with open(path, "rb") as f:
+            r = requests.post(f"https://api.telegram.org/bot{tok}/sendVideo", timeout=180,
+                              data={"chat_id": cid, "caption": caption[:1000], "supports_streaming": "true"},
+                              files={"video": (Path(path).name, f, "video/mp4")}).json()
+        if not r.get("ok"):
+            print("Telegram video:", r.get("description"))
+        return bool(r.get("ok"))
+    except Exception as e:
+        print(f"Telegram video ni uspel: {e}")
+        return False
