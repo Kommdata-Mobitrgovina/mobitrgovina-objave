@@ -74,5 +74,5 @@ jobs:
         run: |
           git config user.name "objave-bot"
           git config user.email "objave-bot@users.noreply.github.com"
-          git add state/ || true
+          git add state/ tiktok/ || true
           git diff --cached --quiet || (git commit -m "Objavljeno $(date -u +%F\ %H:%M)" && git push)
