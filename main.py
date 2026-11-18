@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import os
 import random
+import re
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -114,6 +116,13 @@ def tiktok(dry, st, products, rnd, out_dir) -> int:
     if not dry:
         st[key] = datetime.now(timezone.utc).isoformat()
         social.save_state(st)
+        # arhiv za Marka: video in besedilo se shranita v repozitorij (mapa tiktok/),
+        # od tam ju načrtovano opravilo prenese na njegov računalnik
+        arhiv = Path("tiktok")
+        arhiv.mkdir(exist_ok=True)
+        ime = datetime.now(timezone.utc).strftime("%Y-%m-%d") + "_" + re.sub(r"[^A-Za-z0-9]+", "-", d["name"])[:60].strip("-")
+        shutil.copy(mp4, arhiv / f"{ime}.mp4")
+        (arhiv / f"{ime}.txt").write_text(text)
     return 0
 
 
