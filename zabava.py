@@ -223,7 +223,7 @@ def script(item: dict, rnd: random.Random) -> str:
 
 
 def caption(item: dict, rnd: random.Random) -> str:
-    h = item["hook"].lower().replace("iphone", "iPhone").replace("sms", "SMS").replace("moma", "MoMA")
+    h = item["hook"].lower().replace("iphone", "iPhone").replace("sms", "SMS").replace("moma", "MoMA").replace("pov", "POV")
     first = rnd.choice(["📱", "🤯", "😂", "👀", "🔋"]) + " " + h[:1].upper() + h[1:]
     tags = KIND_TAGS[item["kind"]] + ["#phone", "#smartphone", "#techtok", "#fyp", "#mobitrgovina"]
     ask = {"quiz": "Did you guess it? 👇", "myth": "Did you believe it? 👇", "pov": "Be honest… 😅",
@@ -377,10 +377,10 @@ class FunVideo(Base):
         d.rounded_rectangle([x, y, x + tw, y + 92], radius=46, fill=self.t["accent"])
         d.text((W // 2, y + 46), txt, font=f, fill=self.ink_on_accent, anchor="mm")
 
-    def kinetic(self, d, text, cy, s, size=92, per_word=0.12, color=None):
+    def kinetic(self, d, text, cy, s, size=92, per_word=0.12, color=None, max_w=W - 160):
         """Beseda za besedo, vsaka poskoči na svoje mesto; zadnja beseda v barvi poudarka."""
         f = font("Bold", size)
-        lines = wrap(d, text, f, W - 160, 5)
+        lines = wrap(d, text, f, max_w, 5)
         lh = int(size * 1.18)
         y0 = cy - (len(lines) - 1) * lh / 2
         sp = d.textlength(" ", font=f)
@@ -466,7 +466,7 @@ class FunVideo(Base):
                        anchor="mm")
             if a > 0.3:
                 self.kinetic(d, it["reveal"], top + 340, u - 0.15, size=112 if len(it["reveal"]) < 12 else 84,
-                             per_word=0.08, color=self.ink_on_accent)
+                             per_word=0.08, color=self.ink_on_accent, max_w=W - 260)
             if self.prop in ("battery", "chat") and u > 0.4:
                 d = self.draw_prop(f, s, 1480, 0.6)
             layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
