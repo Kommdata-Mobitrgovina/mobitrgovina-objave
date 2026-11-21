@@ -17,6 +17,7 @@ import obvestila
 import social
 import tts
 import video
+import zabava
 
 
 def main() -> int:
@@ -92,9 +93,10 @@ def main() -> int:
 def tiktok(dry, st, products, rnd, out_dir) -> int:
     seen = {k[:-3]: v for k, v in st.items() if k.endswith("-tt")}
     p = social.pick([x for x in products if social.is_phone(x)], seen, rnd)
-    if not p:
-        print("Ni telefonov za TikTok.")
-        return 0
+    # izmenično: oglas za telefon, potem zabavna vsebina o mobilni telefoniji (zanimivost, mit, kviz, šala)
+    if not p or os.environ.get("TT_VRSTA") == "zabava" or (os.environ.get("TT_VRSTA") != "izdelek"
+                                                           and zabava.is_fun_turn(st)):
+        return tiktok_zabava(dry, st, rnd, out_dir)
     d = social.describe(p)
     screen_hook, spoken_hook = social.tiktok_hook(d, rnd)
     script = social.tiktok_script(d, spoken_hook, rnd)
@@ -121,6 +123,34 @@ def tiktok(dry, st, products, rnd, out_dir) -> int:
         arhiv = Path("tiktok")
         arhiv.mkdir(exist_ok=True)
         ime = datetime.now(timezone.utc).strftime("%Y-%m-%d") + "_" + re.sub(r"[^A-Za-z0-9]+", "-", d["name"])[:60].strip("-")
+        shutil.copy(mp4, arhiv / f"{ime}.mp4")
+        (arhiv / f"{ime}.txt").write_text(text)
+    return 0
+
+
+def tiktok_zabava(dry, st, rnd, out_dir) -> int:
+    it = zabava.pick(st, rnd)
+    key = zabava.key(it)
+    script = zabava.script(it, rnd)
+    text = zabava.caption(it, rnd)
+    voice = tts.speak(script, out_dir / f"{key}.mp3", en=True)
+    seconds = (voice[1] + 2.6) if voice else 12.0
+    bed = music.make(out_dir / f"{key}.wav", max(9.0, seconds) + 0.5)
+    mp4 = out_dir / f"{key}.mp4"
+    video.render(zabava.FunVideo(it), mp4, seconds, music=bed, voice=voice[0] if voice else None)
+    mp4.with_suffix(".txt").write_text(f"{text}\n\n--- voice ---\n{script}")
+    print(f"tiktok zabava: {it['id']}\n\n{text}\n\nVoice: {script}")
+    head = ("🧪 Preizkus – " if dry else "") + "🎵 TikTok video (zabava) je pripravljen. Besedilo je spodaj."
+    if not obvestila.send_video(mp4, head):
+        print("Video na Telegram ni šel.")
+        return 1
+    obvestila.send(text)
+    if not dry:
+        st[key] = datetime.now(timezone.utc).isoformat()
+        social.save_state(st)
+        arhiv = Path("tiktok")
+        arhiv.mkdir(exist_ok=True)
+        ime = datetime.now(timezone.utc).strftime("%Y-%m-%d") + "_Zabava-" + re.sub(r"[^A-Za-z0-9]+", "-", it["id"])
         shutil.copy(mp4, arhiv / f"{ime}.mp4")
         (arhiv / f"{ime}.txt").write_text(text)
     return 0
