@@ -233,6 +233,234 @@ def caption(item: dict, rnd: random.Random) -> str:
                       "", " ".join(dict.fromkeys(tags))])
 
 
+# ---------------------------------------------------------------- slovenska različica (FB/IG Reels)
+# id: (naslov, alineje, razkritje, govor)
+SL = {
+    "first-call": ("PRVI KLIC Z MOBILNIKA V ZGODOVINI",
+                   ["3. april 1973", "New York", "Martin Cooper iz Motorole je poklical tekmeca iz Bell Labs"],
+                   "To je bil šele flex.",
+                   "Prvi klic z mobilnega telefona je bil 3. aprila 1973 v New Yorku. Inženir Motorole Martin Cooper "
+                   "je z njim poklical svojega tekmeca iz Bell Labs. To je bil šele flex."),
+    "dynatac-price": ("KOLIKO JE STAL PRVI MOBILNI TELEFON?",
+                      ["Motorola DynaTAC 8000X", "Leto 1983", "Teža: skoraj 800 g"],
+                      "3.995 $",
+                      "Koliko je stal prvi mobilni telefon? Motorola DynaTAC, leto 1983, skoraj 800 gramov. "
+                      "Odgovor: 3995 dolarjev. In okoli 30 minut pogovora."),
+    "first-sms": ("PRVI SMS V ZGODOVINI SE JE GLASIL…",
+                  ["3. december 1992", "Poslan z računalnika na telefon", "Samo dve besedi"],
+                  "»Merry Christmas«",
+                  "Prvi SMS je bil poslan 3. decembra 1992. Natipkan je bil na računalniku, poslan na telefon, "
+                  "in glasil se je: Merry Christmas."),
+    "nokia-1100": ("NAJBOLJ PRODAJAN TELEFON VSEH ČASOV JE…",
+                   ["Ni iPhone", "Ni Samsung", "Več kot 250 milijonov prodanih"],
+                   "Nokia 1100",
+                   "Najbolj prodajan telefon vseh časov? Ni iPhone. Ni Samsung. "
+                   "To je Nokia 1100, z več kot 250 milijoni prodanih kosov."),
+    "snake": ("KAČA JE NA NOKII ŽE OD LETA 1997",
+              ["Najprej na Nokii 6110", "Brez trgovine z aplikacijami", "Brez Wi-Fi-ja"],
+              "Še vedno neporažena.",
+              "Igrica kača se je prvič pojavila na Nokii 6110 leta 1997. Brez aplikacij, brez Wi-Fi-ja, "
+              "pa še vedno ena najbolj zasvojljivih iger."),
+    "apollo": ("TVOJ TELEFON PROTI PRISTANKU NA LUNI",
+               ["Računalnik Apolla 11: 1969", "Tvoj telefon: v žepu", "Milijonkrat zmogljivejši"],
+               "Mi pa z njim gledamo meme.",
+               "Telefon v tvojem žepu je milijonkrat zmogljivejši od računalnika, ki je Apollo 11 pripeljal na Luno. "
+               "Mi pa z njim večinoma gledamo meme."),
+    "nomophobia": ("ZA TA OBČUTEK OBSTAJA BESEDA",
+                   ["Telefona ni v žepu", "Srce začne biti hitreje", "Začne se panično iskanje"],
+                   "Nomofobija",
+                   "Tista panika, ko ne najdeš telefona? Za to obstaja beseda. Nomofobija, strah pred tem, "
+                   "da si brez telefona. Označi nekoga, ki jo ima."),
+    "guess-3310": ("UGANI LETO: NOKIA 3310",
+                   ["Neuničljiva", "Baterija za cel teden", "S kačo dva"],
+                   "2000",
+                   "Ugani leto. Nokia 3310. Neuničljiva, baterija za cel teden, kača dva. Prišla je leta 2000."),
+    "guess-iphone": ("UGANI LETO: PRVI iPHONE",
+                     ["Zaslon 3,5 palca", "Ob izidu brez App Stora", "Kamera 2 megapiksla"],
+                     "2007",
+                     "Ugani leto. Prvi iPhone. Zaslon tri cela pet palca, ob izidu brez App Stora in kamera z dvema "
+                     "megapiksloma. Izšel je leta 2007."),
+    "guess-android": ("UGANI LETO: PRVI ANDROID TELEFON",
+                      ["HTC Dream / T-Mobile G1", "Izvlečna tipkovnica", "Sledilna kroglica"],
+                      "2008",
+                      "Ugani leto. Prvi telefon z Androidom, HTC Dream. Izvlečna tipkovnica in sledilna kroglica. "
+                      "Izšel je leta 2008."),
+    "guess-razr": ("UGANI LETO: MOTOROLA RAZR V3",
+                   ["Tanek preklopni telefon", "Kovinsko ohišje", "Vsi so ga hoteli"],
+                   "2004",
+                   "Ugani leto. Motorola Razr V3. Super tanek, kovinski in vsi so ga hoteli. Izšel je leta 2004."),
+    "myth-overnight": ("MIT ALI DEJSTVO: POLNJENJE ČEZ NOČ UNIČI BATERIJO",
+                       ["Sodobni telefoni nehajo polniti, ko so polni", "Mnogi čez noč počakajo pri 80 %",
+                        "Pravi sovražnik je vročina"],
+                       "MIT",
+                       "Mit ali dejstvo? Polnjenje čez noč uniči baterijo. Večinoma mit. Sodobni telefoni nehajo polniti, "
+                       "ko so polni, mnogi pa čez noč počakajo pri osemdesetih odstotkih. Pravi sovražnik je vročina."),
+    "myth-close-apps": ("MIT ALI DEJSTVO: ZAPIRANJE APLIKACIJ VARČUJE BATERIJO",
+                        ["Telefon aplikacije v ozadju že sam ustavi", "Ponoven zagon od začetka porabi več"],
+                        "MIT",
+                        "Mit ali dejstvo? Zapiranje aplikacij varčuje baterijo. Mit. Telefon aplikacije v ozadju že sam "
+                        "ustavi, ponovno odpiranje od začetka pa porabi več energije."),
+    "myth-megapixels": ("MIT ALI DEJSTVO: VEČ MEGAPIKSLOV = BOLJŠE SLIKE",
+                        ["Velikost senzorja šteje", "Objektiv in obdelava štejeta", "Megapiksli so le ena številka"],
+                        "MIT",
+                        "Mit ali dejstvo? Več megapikslov pomeni boljše slike. Mit. Velikost senzorja, objektiv in obdelava "
+                        "štejejo veliko več. Megapiksli so le ena številka na škatli."),
+    "myth-drain": ("MIT ALI DEJSTVO: BATERIJO OBČASNO IZPRAZNI DO 0 %",
+                   ["To je veljalo za stare baterije", "Litij-ionske imajo rade sredino", "Drži se med 20 in 80 %"],
+                   "MIT",
+                   "Mit ali dejstvo? Baterijo moraš občasno izprazniti do nič. Mit. To je veljalo za stare baterije. "
+                   "Litij ionska je najbolj srečna med dvajset in osemdeset odstotki."),
+    "fact-airplane": ("MIT ALI DEJSTVO: V NAČINU ZA LETALO SE HITREJE POLNI",
+                      ["Ne išče signala", "Manj opravil v ozadju", "Malo hitreje, ne čudežno"],
+                      "DEJSTVO",
+                      "Mit ali dejstvo? V načinu za letalo se telefon polni hitreje. Dejstvo, malo. "
+                      "Telefon neha iskati signal, zato gre več energije v baterijo."),
+    "pov-1percent": ("POV: TELEFON JE NA 1 %",
+                     ["Svetlost: najnižja", "Varčevanje z energijo: VKLOP", "Še vedno pošiljaš zadnje glasovno sporočilo"],
+                     "Telefon: *ugasne*",
+                     "Pi o vi. Telefon je na enem odstotku. Svetlost čisto dol, varčevanje vklopljeno, "
+                     "ti pa še vedno pošiljaš zadnje glasovno sporočilo. In ugasne."),
+    "pov-holding": ("POV: IŠČEŠ SVOJ TELEFON…",
+                    ["Preveriš žepe", "Preveriš kavč", "Vprašaš vse v sobi"],
+                    "…medtem ko ga držiš v roki",
+                    "Pi o vi. Iščeš svoj telefon. Žepi. Kavč. Vprašaš vse v sobi. In ves čas ga držiš v roki."),
+    "pov-drop": ("POV: RAVNOKAR TI JE PADEL TELEFON",
+                 ["Pristane z zaslonom navzdol", "Nihče se ne premakne", "Najpočasnejše pobiranje v življenju"],
+                 "Kupi ovitek. Resno.",
+                 "Pi o vi. Ravnokar ti je padel telefon. Pristane z zaslonom navzdol. Nihče se ne premakne. "
+                 "Najpočasnejše pobiranje v tvojem življenju. Kupi ovitek. Resno."),
+    "pov-one-notification": ("»SAMO ENO OBVESTILO POGLEDAM«",
+                             ["21:00 – eno obvestilo", "21:05 – še en video", "23:40 – kako se je to zgodilo"],
+                             "Vsakič. Znova.",
+                             "Samo eno obvestilo pogledam. Devet zvečer. Še en video. Naenkrat je enajst in štirideset. "
+                             "Vsakič znova."),
+    "pov-20": ("JAZ, KO JE TELEFON NA 21 %",
+               ["Čisto v redu", "Živim svoje življenje", "Sploh nisem zaskrbljen"],
+               "20 %: PANIKA",
+               "Jaz, ko je telefon na enaindvajsetih odstotkih. Čisto v redu, živim svoje življenje. "
+               "Dvajset odstotkov? Panika."),
+    "tip-restart": ("TO NAREDI ENKRAT NA TEDEN",
+                    ["Ponovno zaženi telefon", "Počisti zataknjene aplikacije", "Odpravi veliko čudnih napak"],
+                    "30 sekund. Velika razlika.",
+                    "To naredi enkrat na teden. Ponovno zaženi telefon. Počisti zataknjene aplikacije in pomnilnik "
+                    "ter odpravi kup čudnih napak. Trideset sekund, velika razlika."),
+    "tip-heat": ("ŠTEVILKA 1, KI UNIČUJE BATERIJE",
+                 ["Ni polnjenje čez noč", "Ni samo starost", "To je:"],
+                 "VROČINA",
+                 "Kaj najbolj uničuje baterije? Ne polnjenje čez noč. Vročina. Ne puščaj telefona v vročem avtu "
+                 "in ga ne polni pod blazino."),
+    "tip-used": ("KAJ PREVERITI PRED NAKUPOM RABLJENEGA TELEFONA",
+                 ["Zdravje baterije", "Odklenjen za vsa omrežja", "Garancija prodajalca"],
+                 "Brez garancije? Pojdi naprej.",
+                 "Kaj preveriti pred nakupom rabljenega telefona. Zdravje baterije. Je odklenjen za vsa omrežja? "
+                 "In ali prodajalec da garancijo? Brez garancije? Pojdi naprej."),
+    "tot-os": ("EKIPA iPHONE ALI EKIPA ANDROID?",
+               ["A: iPhone", "B: Android"], "Napiši A ali B!",
+               "Dobro, največje vprašanje. Ekipa iPhone ali ekipa Android? Brez sedenja na dveh stolih. "
+               "Napiši A ali B in zagovarjaj svojo izbiro."),
+    "tot-case": ("OVITEK ALI BREZ OVITKA?",
+                 ["A: Vedno ovitek", "B: Živim nevarno"], "Napiši A ali B!",
+                 "Ovitek ali brez ovitka? Si zaščiten ali živiš nevarno? Napiši A ali B."),
+    "tot-dark": ("TEMNI ALI SVETLI NAČIN?",
+                 ["A: Temni način", "B: Svetli način"], "Napiši A ali B!",
+                 "Temni ali svetli način? Samo eden je pravilen. Napiši A ali B."),
+    "tot-silent": ("TIHI NAČIN ALI ZVONJENJE?",
+                   ["A: Vedno tiho", "B: Glasno in ponosno"], "Napiši A ali B!",
+                   "Za vedno na tiho ali zvonjenje glasno in ponosno? Napiši A ali B."),
+    "list-2000s": ("SAMO OTROCI 2000-IH SE SPOMNIJO…",
+                   ["Polifonih melodij zvonjenja", "Zamenljivih maskic", "Štetja vsakega znaka v SMS-u"],
+                   "Kaj te je zadelo?",
+                   "Samo otroci dvatisočih se spomnijo. Polifone melodije zvonjenja. Zamenljive maskice. "
+                   "In štetje vsakega znaka v SMS-u. Kaj te je zadelo?"),
+    "list-flip": ("STVARI, KI SO SE NA PREKLOPNEM TELEFONU ZDELE NEZAKONITE",
+                  ["Zapreš ga, da končaš klic", "Pomotoma pritisneš gumb za internet", "Pošlješ MMS"],
+                  "Čista moč.",
+                  "Stvari, ki so se na preklopnem telefonu zdele nezakonite. Zapreš ga, da končaš klic. "
+                  "Pomotoma pritisneš gumb za internet in paničariš. Pošlješ MMS. Čista moč."),
+    "battery-personality": ("KAJ TVOJ % BATERIJE POVE O TEBI",
+                            ["100 %: imaš življenje urejeno", "50 %: živiš na robu", "5 %: kaos je tvoj stil"],
+                            "Kateri si ti?",
+                            "Kaj tvoj odstotek baterije pove o tebi. Sto odstotkov, imaš življenje urejeno. "
+                            "Petdeset, rad živiš na robu. Pet odstotkov? Kaos je tvoj stil. Kateri si ti?"),
+    "sms-160": ("ZAKAJ JE BIL SMS OMEJEN NA 160 ZNAKOV?",
+                ["1985: inženir Friedhelm Hillebrand", "Natipkal je tipične stavke in vprašanja",
+                 "Skoraj vsi so šli v 160 znakov"],
+                "Pa je bilo 160.",
+                "Zakaj je bil SMS omejen na sto šestdeset znakov? Leta 1985 je inženir Friedhelm Hillebrand natipkal "
+                "tipične stavke in vprašanja in skoraj vsi so šli v sto šestdeset znakov. Pa je bilo sto šestdeset."),
+    "emoji": ("PRVI EMOJIJI SO BILI NAREJENI ZA TELEFONE",
+              ["1999, Japonska", "Oblikovalec Shigetaka Kurita", "176 drobnih ikon 12 x 12 pikslov"],
+              "Danes so v MoMA.",
+              "Prvi emojiji so bili narejeni za telefone. Leta 1999 na Japonskem jih je oblikovalec Shigetaka Kurita "
+              "narisal 176, vsakega dvanajst krat dvanajst pikslov. Danes so v Muzeju moderne umetnosti v New Yorku."),
+    "bluetooth": ("BLUETOOTH JE DOBIL IME PO VIKINŠKEM KRALJU",
+                  ["Kralj Harald »Bluetooth«", "Združil je Dansko in Norveško", "Logotip = njegovi inicialki v runah"],
+                  "Vikinška tehnologija.",
+                  "Bluetooth je dobil ime po vikinškem kralju. Harald Bluetooth je združil Dansko in Norveško, "
+                  "logotip Bluetootha pa sta njegovi inicialki, zapisani v runah. Vikinška tehnologija."),
+    "android-desserts": ("RAZLIČICE ANDROIDA SO BILE SLADICE",
+                         ["Cupcake, Donut, Eclair", "KitKat, Lollipop, Oreo", "Pie je bila zadnja"],
+                         "Potem: samo številke.",
+                         "Različice Androida so bile poimenovane po sladicah. Cupcake, Donut, Eclair, KitKat, Lollipop, "
+                         "Oreo. Pie je bila zadnja. Potem pa samo dolgočasne številke."),
+}
+
+TXT = {
+    "en": dict(label=None, answer="ANSWER", guess="Guess before the answer!", ab="Comment A or B",
+               side="Which side are you on?", end1="Phones with warranty", end2="shipped across the EU",
+               foot="Follow for more phone stuff"),
+    "sl": dict(label={"fact": "ALI SI VEDEL?", "myth": "MIT ALI DEJSTVO?", "quiz": "KVIZ", "pov": "SE NAJDEŠ?",
+                      "tip": "NASVET", "tot": "TO ALI ONO?", "list": "BODI ISKREN"},
+               answer="ODGOVOR", guess="Ugibaj, preden razkrijemo!", ab="Napiši A ali B",
+               side="Na kateri strani si?", end1="Telefoni z garancijo", end2="dostava po vsej Sloveniji",
+               foot="Sledi za več o telefonih"),
+}
+CTAS_SL = ["Sledi nam za več!", "Napiši odgovor v komentar!", "Označi prijatelja, ki mora to videti!"]
+KIND_TAGS_SL = {"fact": ["#zanimivosti", "#aliveste"], "myth": ["#mitalidejstvo", "#nasveti"],
+                "quiz": ["#kviz", "#nostalgija"], "pov": ["#pov", "#hecno"], "tip": ["#nasveti", "#triki"],
+                "tot": ["#toalionot", "#iphonevsandroid"], "list": ["#nostalgija", "#2000s"]}
+
+
+def localized(item: dict, lang: str) -> dict:
+    if lang != "sl":
+        return item
+    hook, body, reveal, voice = SL[item["id"]]
+    return {**item, "hook": hook, "body": body, "reveal": reveal, "voice": voice}
+
+
+def key_sl(item: dict) -> str:
+    return f"zabavasl-{item['id']}"  # namenoma brez »zabava-«, da ne zmede izmenjave na TikToku
+
+
+def pick_sl(st: dict, rnd: random.Random) -> dict:
+    fresh = [i for i in ITEMS if key_sl(i) not in st]
+    if fresh:
+        return rnd.choice(fresh)
+    return min(ITEMS, key=lambda i: st[key_sl(i)])
+
+
+def is_fun_reel_turn(st: dict) -> bool:
+    """Reels na FB/IG: izmenično izdelek in zabava."""
+    def last(pred):
+        ts = [v for k, v in st.items() if pred(k)]
+        return max(ts) if ts else ""
+    return last(lambda k: k.startswith("zabavasl-")) <= last(lambda k: k.endswith("-reel"))
+
+
+def script_sl(item: dict, rnd: random.Random) -> str:
+    return f"{localized(item, 'sl')['voice']} {rnd.choice(CTAS_SL)}"
+
+
+def caption_sl(item: dict, rnd: random.Random) -> str:
+    h = localized(item, "sl")["hook"].lower().replace("iphone", "iPhone").replace("sms", "SMS").replace("pov", "POV")
+    first = rnd.choice(["📱", "🤯", "😂", "👀", "🔋"]) + " " + h[:1].upper() + h[1:]
+    ask = {"quiz": "Si uganil? 👇", "myth": "Si verjel? 👇", "pov": "Bodi iskren… 😅", "fact": "Si to vedel? 👇",
+           "tip": "Shrani za pozneje 📌", "tot": "A ali B? Napiši v komentar 👇", "list": "Kateri si ti? 👇"}[item["kind"]]
+    tags = KIND_TAGS_SL[item["kind"]] + ["#telefon", "#mobitel", "#slovenija", "#mobitrgovina"]
+    return "\n".join([first, "", ask, "", "📦 Telefoni z garancijo in dostavo po vsej Sloveniji: mobitrgovina.com",
+                      "", " ".join(dict.fromkeys(tags))])
+
+
 def _pop(t: float) -> float:
     """Ease z rahlim prenihajem (back-out) za »poskočne« animacije."""
     t = max(0.0, min(1.0, t))
@@ -244,9 +472,11 @@ class FunVideo(Base):
     """Naslov se izpiše beseda za besedo ob rekvizitu (baterija, stari telefon, sporočila, A/B) →
     alineje → razkritje s konfeti in tresljajem → zaključna kartica. Ozadje se ves čas rahlo giblje."""
 
-    def __init__(self, item: dict, theme=None, seed=None):
+    def __init__(self, item: dict, theme=None, seed=None, lang="en"):
         super().__init__(theme, random.Random(seed))
-        self.it = item
+        self.lang = lang
+        self.tx = TXT[lang]
+        self.it = localized(item, lang)
         self.prop = item.get("prop")
         self.ink_on_accent = (12, 15, 22) if self.tname in ("temna", "rdeca") else (255, 255, 255)
         r = self.rnd
@@ -369,7 +599,7 @@ class FunVideo(Base):
     def label(self, d, a):
         if a <= 0:
             return
-        txt = KIND_LABEL[self.it["kind"]]
+        txt = (self.tx["label"] or KIND_LABEL)[self.it["kind"]]
         f = font("Bold", 46)
         tw = d.textlength(txt, font=f) + 80
         x = int(W / 2 - tw / 2)
@@ -419,8 +649,8 @@ class FunVideo(Base):
             if self.prop == "versus":
                 self.versus(d, 10)
                 pulse = 1 + 0.04 * math.sin(s * 6)
-                self.kinetic(d, "Comment A or B", 1150, 10, size=int(88 * pulse))
-                self.kinetic(d, "Which side are you on?", 1300, 10, size=56, color=self.t["sub"])
+                self.kinetic(d, self.tx["ab"], 1150, 10, size=int(88 * pulse))
+                self.kinetic(d, self.tx["side"], 1300, 10, size=56, color=self.t["sub"])
             else:
                 for ln_i, ln in enumerate(wrap(d, it["hook"], font("Bold", 56), W - 160, 3)):
                     d.text((W // 2, 420 + ln_i * 68), ln, font=font("Bold", 56), fill=self.t["sub"], anchor="mm")
@@ -451,7 +681,7 @@ class FunVideo(Base):
                     d.rounded_rectangle([bx0, by, bx1, by + 30], radius=15, fill=self.t["sub"])
                     d.rounded_rectangle([bx0, by, bx0 + max(30, int((bx1 - bx0) * (1 - u))), by + 30], radius=15,
                                         fill=self.t["accent"])
-                    d.text((W // 2, by + 90), "Guess before the answer!", font=font("Medium", 44),
+                    d.text((W // 2, by + 90), self.tx["guess"], font=font("Medium", 44),
                            fill=self.t["sub"], anchor="mm")
         elif s < c3:
             u = s - c2
@@ -462,7 +692,7 @@ class FunVideo(Base):
             d.rounded_rectangle([70 + pad + shake, top + pad, W - 70 - pad + shake, top + 660 - pad], radius=60,
                                 fill=self.t["accent"])
             if it["kind"] in ("quiz", "myth"):
-                d.text((W // 2 + shake, top + 120), "ANSWER", font=font("Bold", 50), fill=self.ink_on_accent,
+                d.text((W // 2 + shake, top + 120), self.tx["answer"], font=font("Bold", 50), fill=self.ink_on_accent,
                        anchor="mm")
             if a > 0.3:
                 self.kinetic(d, it["reveal"], top + 340, u - 0.15, size=112 if len(it["reveal"]) < 12 else 84,
@@ -485,15 +715,15 @@ class FunVideo(Base):
             top = int(700 + (1 - a) * 200)
             d.rounded_rectangle([60, top, W - 60, top + 520], radius=54, fill=(255, 255, 255))
             ink = (16, 32, 64)
-            d.text((W // 2, top + 120), "Phones with warranty", font=font("Bold", 64), fill=ink, anchor="mm")
-            d.text((W // 2, top + 210), "shipped across the EU", font=font("Medium", 52), fill=(110, 118, 130),
+            d.text((W // 2, top + 120), self.tx["end1"], font=font("Bold", 64), fill=ink, anchor="mm")
+            d.text((W // 2, top + 210), self.tx["end2"], font=font("Medium", 52), fill=(110, 118, 130),
                    anchor="mm")
             y = top + 370
             p = 1 + 0.03 * math.sin(s * 7)
             hw = int((W - 280) / 2 * p)
             d.rounded_rectangle([W // 2 - hw, y - 60, W // 2 + hw, y + 60], radius=60, fill=(230, 40, 55))
             d.text((W // 2, y), "mobitrgovina.com", font=font("Bold", 58), fill=(255, 255, 255), anchor="mm")
-        self.footer(d, "Follow for more phone stuff")
+        self.footer(d, self.tx["foot"])
         return f.convert("RGB")
 
 

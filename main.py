@@ -32,6 +32,8 @@ def main() -> int:
 
     if fmt == "tiktok":
         return tiktok(dry, st, products, rnd, out_dir)
+    if fmt == "reel" and slot == "izdelek" and zabava.is_fun_reel_turn(st):
+        return reel_zabava(dry, st, rnd, out_dir)  # izmenično: Reel z izdelkom, potem zabaven Reel
 
     if slot == "odkup":
         key = "odkup-" + datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -154,6 +156,41 @@ def tiktok_zabava(dry, st, rnd, out_dir) -> int:
         shutil.copy(mp4, arhiv / f"{ime}.mp4")
         (arhiv / f"{ime}.txt").write_text(text)
     return 0
+
+
+
+def reel_zabava(dry, st, rnd, out_dir) -> int:
+    """Zabaven Reel v slovenščini (zanimivost, mit, kviz, šala) na FB in IG."""
+    it = zabava.pick_sl(st, rnd)
+    key = zabava.key_sl(it)
+    script = zabava.script_sl(it, rnd)
+    text = zabava.caption_sl(it, rnd)
+    voice = tts.speak(script, out_dir / f"{key}.mp3")
+    seconds = (voice[1] + 2.6) if voice else 12.0
+    bed = music.make(out_dir / f"{key}.wav", max(9.0, seconds) + 0.5)
+    mp4 = out_dir / f"{key}.mp4"
+    video.render(zabava.FunVideo(it, lang="sl"), mp4, seconds, music=bed, voice=voice[0] if voice else None)
+    mp4.with_suffix(".txt").write_text(f"{text}\n\n--- govor ---\n{script}")
+    print(f"reel zabava: {it['id']}\n\n{text}\n\nGovor: {script}")
+    if dry:
+        print("DRY_RUN: nič objavljeno.")
+        obvestila.send_video(mp4, "🧪 Preizkus – zabaven Reel, nič objavljeno.")
+        return 0
+    ok, results = False, []
+    for label, fn in (("Facebook Reel", social.post_facebook_reel), ("Instagram Reel", social.post_instagram_reel)):
+        try:
+            print(f"{label}: objavljeno {fn(mp4, text)}")
+            ok = True
+            results.append(f"✅ {label}")
+        except Exception as e:  # ena platforma ne sme ustaviti druge
+            print(f"{label}: NAPAKA {e}", file=sys.stderr)
+            results.append(f"❌ {label}: {str(e)[:150]}")
+    obvestila.send(f"{'🎉' if ok else '⚠️'} Zabaven Reel – {it['id']}\n" + "\n".join(results))
+    if ok:
+        st[key] = datetime.now(timezone.utc).isoformat()
+        social.save_state(st)
+    return 0 if ok else 1
+
 
 
 if __name__ == "__main__":
